@@ -16,9 +16,35 @@ const findUserByEmail = async (email) => {
     logger.error(`AUTH REPO - Database error in findUserByEmail:`, {
       message: err.message,
       code: err.code,
-      detail: err.detail
+      detail: err.detail,
+      hint: err.hint,
+      severity: err.severity,
     })
-    throw err
+    
+    // Handle specific database errors
+    if (err.code === 'ECONNREFUSED' || err.code === 'EHOSTUNREACH') {
+      throw {
+        statusCode: 503,
+        message: 'Database connection failed. Please try again later.',
+      }
+    } else if (err.code === '42P01') {
+      // Relation does not exist
+      throw {
+        statusCode: 500,
+        message: 'Database schema error. Users table not found.',
+      }
+    } else if (err.code === '42703') {
+      // Column does not exist
+      throw {
+        statusCode: 500,
+        message: 'Database schema error. Invalid column reference.',
+      }
+    }
+    
+    throw {
+      statusCode: 500,
+      message: 'Database query failed',
+    }
   }
 }
 
@@ -36,9 +62,20 @@ const updateLastLogin = async (userId) => {
     logger.error(`AUTH REPO - Database error in updateLastLogin:`, {
       message: err.message,
       code: err.code,
-      detail: err.detail
+      detail: err.detail,
+      hint: err.hint,
     })
-    throw err
+    
+    // Don't fail login if last_login update fails
+    if (err.code === '42P01' || err.code === '42703') {
+      logger.warn('AUTH REPO - Skipping last_login update due to schema error')
+      return
+    }
+    
+    throw {
+      statusCode: 500,
+      message: 'Database update failed',
+    }
   }
 }
 
