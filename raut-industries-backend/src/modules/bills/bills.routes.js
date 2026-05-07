@@ -11,6 +11,7 @@ router.use(authenticate)
 router.get('/next-number', billsController.getNextBillNumber)
 router.post('/preview', billsController.previewBill)
 router.post('/test-email', billsController.sendTestEmail)
+router.post('/send-email', billsController.sendBillViaEmail)
 
 // CRUD
 router.get('/', billsController.getAllBills)

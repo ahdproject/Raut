@@ -136,6 +136,37 @@ const sendTestEmail = async (req, res, next) => {
   }
 }
 
+const sendBillViaEmail = async (req, res, next) => {
+  try {
+    const { billId, recipientEmail } = req.body
+
+    // Validate inputs
+    if (!billId) {
+      return error(res, 'Bill ID is required', 400)
+    }
+    if (!recipientEmail) {
+      return error(res, 'Recipient email is required', 400)
+    }
+
+    // Fetch bill details
+    const bill = await billsService.getBillById(billId)
+    if (!bill) {
+      return error(res, BILL_MESSAGES.NOT_FOUND, 404)
+    }
+
+    // Send bill via email
+    const sent = await billsService.sendBillViaEmail(bill, recipientEmail)
+
+    if (sent) {
+      return success(res, { sent: true }, 'Bill sent successfully via email')
+    } else {
+      return error(res, 'Failed to send bill via email', 500)
+    }
+  } catch (err) {
+    next(err)
+  }
+}
+
 module.exports = {
   getNextBillNumber,
   previewBill,
@@ -146,4 +177,5 @@ module.exports = {
   confirmBill,
   cancelBill,
   sendTestEmail,
+  sendBillViaEmail,
 }

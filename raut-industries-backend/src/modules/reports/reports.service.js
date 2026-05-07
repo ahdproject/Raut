@@ -1,4 +1,5 @@
 const reportsRepository = require('./reports.repository')
+const emailService = require('../../utils/emailService')
 
 // ─── Shared Validation Helper ─────────────────────────────────
 
@@ -319,10 +320,32 @@ const getDashboardSummary = async (month, year) => {
   }
 }
 
+// ─── Send Report via Email ────────────────────────────────────
+
+const sendReportViaEmail = async (options) => {
+  try {
+    const { recipientEmail, reportName, reportType, reportData } = options
+
+    // Send via email service (without PDF for now, as we don't have pdfGenerator for reports yet)
+    await emailService.sendReportEmail({
+      recipientEmail,
+      reportName,
+      reportType,
+      reportData,
+      pdfBuffer: null, // Can be added later with a proper report PDF generator
+    })
+
+    return true
+  } catch (error) {
+    throw error
+  }
+}
+
 module.exports = {
   getProfitAndLoss,
   getGstReconciliation,
   getSalesSummaryReport,
   getAttendanceReport,
   getDashboardSummary,
+  sendReportViaEmail,
 }

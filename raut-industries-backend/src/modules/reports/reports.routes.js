@@ -39,4 +39,10 @@ router.get(
   reportsController.getAttendanceReport
 )
 
+// Send Report via Email — all roles
+router.post(
+  '/send-email',
+  reportsController.sendReportViaEmail
+)
+
 module.exports = router

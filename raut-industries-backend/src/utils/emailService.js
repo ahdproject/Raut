@@ -1,49 +1,67 @@
-const nodemailer = require('nodemailer')
 const config = require('../config/env')
 const logger = require('./logger')
-const { generateBillPDF } = require('./pdfGenerator')
+const { generateBillPDF, generateReportPDF } = require('./pdfGenerator')
+const axios = require('axios')
 
-// Create transporter
-let transporter = null
+// Brevo API endpoint
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email'
+const BREVO_API_KEY = process.env.BREVO_API_KEY
 
-const initializeTransporter = () => {
-  if (transporter) return transporter
-
+/**
+ * Send email using Brevo API
+ * @param {Object} mailOptions - Mail configuration
+ * @returns {Promise<Object>} - Response from Brevo
+ */
+const sendEmailViaBrevo = async (mailOptions) => {
   try {
-    transporter = nodemailer.createTransport({
-      service: config.email.service,
-      auth: {
-        user: config.email.user,
-        pass: config.email.password,
+    if (!BREVO_API_KEY) {
+      logger.error('Brevo API key not configured')
+      throw new Error('BREVO_API_KEY not configured')
+    }
+
+    const payload = {
+      sender: {
+        name: mailOptions.from.name || config.email.senderName,
+        email: mailOptions.from.email || config.email.user,
+      },
+      to: Array.isArray(mailOptions.to) 
+        ? mailOptions.to.map(email => ({ email }))
+        : [{ email: mailOptions.to }],
+      subject: mailOptions.subject,
+      htmlContent: mailOptions.html,
+    }
+
+    // Add attachments if provided
+    if (mailOptions.attachments && mailOptions.attachments.length > 0) {
+      payload.attachment = mailOptions.attachments.map(att => ({
+        name: att.filename,
+        content: att.content.toString('base64'),
+        contentType: att.contentType,
+      }))
+    }
+
+    const response = await axios.post(BREVO_API_URL, payload, {
+      headers: {
+        'api-key': BREVO_API_KEY,
+        'Content-Type': 'application/json',
       },
     })
-    logger.info('Email transporter initialized successfully')
-    return transporter
+
+    logger.info('Email sent via Brevo successfully', { messageId: response.data.messageId })
+    return response.data
   } catch (error) {
-    logger.error('Failed to initialize email transporter', error)
-    return null
+    logger.error('Failed to send email via Brevo', error.response?.data || error.message)
+    throw error
   }
 }
 
 /**
  * Send bill creation notification to admin
  * @param {Object} billData - Bill information
- * @param {number} billData.id - Bill ID
- * @param {number} billData.bill_no - Bill number
- * @param {Object|string} billData.client - Client information or client name
- * @param {Object} billData.totals - Bill totals
- * @param {string} billData.created_by - User who created the bill
- * @param {string} billData.created_by_name - Name of user who created the bill
  * @returns {Promise<boolean>} - Success status
  */
 const sendBillCreationNotification = async (billData) => {
   try {
-    const transport = initializeTransporter()
-    if (!transport) {
-      logger.error('Email transporter not initialized')
-      return false
-    }
-
     const adminEmail = config.email.adminEmail
     if (!adminEmail) {
       logger.warn('Admin email not configured in environment')
@@ -129,7 +147,10 @@ const sendBillCreationNotification = async (billData) => {
     `
 
     const mailOptions = {
-      from: `${config.email.senderName} <${config.email.user}>`,
+      from: {
+        name: config.email.senderName,
+        email: config.email.user,
+      },
       to: adminEmail,
       subject: `New Bill Created - Bill #${billData.bill_no}`,
       html: htmlContent,
@@ -154,8 +175,7 @@ const sendBillCreationNotification = async (billData) => {
       })
     }
 
-    const info = await transport.sendMail(mailOptions)
-    logger.info(`Bill creation notification sent successfully. Message ID: ${info.messageId}${pdfBuffer ? ' (with PDF)' : ''}`)
+    await sendEmailViaBrevo(mailOptions)
     return true
   } catch (error) {
     logger.error('Failed to send bill creation notification email', error)
@@ -170,14 +190,11 @@ const sendBillCreationNotification = async (billData) => {
  */
 const sendTestEmail = async (toEmail) => {
   try {
-    const transport = initializeTransporter()
-    if (!transport) {
-      logger.error('Email transporter not initialized')
-      return false
-    }
-
     const mailOptions = {
-      from: `${config.email.senderName} <${config.email.user}>`,
+      from: {
+        name: config.email.senderName,
+        email: config.email.user,
+      },
       to: toEmail,
       subject: 'Test Email from Raut Industries',
       html: `
@@ -187,8 +204,7 @@ const sendTestEmail = async (toEmail) => {
       `,
     }
 
-    const info = await transport.sendMail(mailOptions)
-    logger.info(`Test email sent successfully to ${toEmail}. Message ID: ${info.messageId}`)
+    await sendEmailViaBrevo(mailOptions)
     return true
   } catch (error) {
     logger.error('Failed to send test email', error)
@@ -196,8 +212,100 @@ const sendTestEmail = async (toEmail) => {
   }
 }
 
+/**
+ * Send report via email
+ * @param {Object} options - Email options
+ * @param {string} options.recipientEmail - Recipient email address
+ * @param {string} options.reportName - Name of the report
+ * @param {string} options.reportType - Type of report (pnl, gst, sales, attendance)
+ * @param {Object} options.reportData - Report data to send
+ * @param {Buffer} options.pdfBuffer - PDF buffer of the report
+ * @returns {Promise<boolean>} - Success status
+ */
+const sendReportEmail = async (options) => {
+  try {
+    const { recipientEmail, reportName, reportType, reportData, pdfBuffer } = options
+
+    if (!recipientEmail) {
+      throw new Error('Recipient email is required')
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9; border-radius: 8px; }
+          .header { background-color: #2c3e50; color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center; }
+          .content { background-color: white; padding: 20px; border-radius: 0 0 8px 8px; }
+          .report-details { margin: 20px 0; border-collapse: collapse; width: 100%; }
+          .report-details td { padding: 10px; border-bottom: 1px solid #ddd; }
+          .report-details .label { font-weight: bold; width: 40%; }
+          .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>📊 ${reportName}</h1>
+          </div>
+          <div class="content">
+            <p>Hello,</p>
+            <p>Please find attached your requested report: <strong>${reportName}</strong></p>
+            
+            <table class="report-details">
+              <tr>
+                <td class="label">Report Type:</td>
+                <td>${reportType.toUpperCase()}</td>
+              </tr>
+              <tr>
+                <td class="label">Generated On:</td>
+                <td>${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString('en-IN')}</td>
+              </tr>
+            </table>
+
+            <div class="footer">
+              <p>This is an automated report from Raut Industries System.</p>
+              <p>Please do not reply to this email.</p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+
+    const mailOptions = {
+      from: {
+        name: config.email.senderName,
+        email: config.email.user,
+      },
+      to: recipientEmail,
+      subject: `Report: ${reportName} - ${new Date().toLocaleDateString('en-IN')}`,
+      html: htmlContent,
+      attachments: [],
+    }
+
+    // Add PDF attachment if provided
+    if (pdfBuffer) {
+      mailOptions.attachments.push({
+        filename: `${reportName}_${new Date().getTime()}.pdf`,
+        content: pdfBuffer,
+        contentType: 'application/pdf',
+      })
+    }
+
+    await sendEmailViaBrevo(mailOptions)
+    logger.info(`Report email sent successfully to ${recipientEmail}`)
+    return true
+  } catch (error) {
+    logger.error('Failed to send report email', error)
+    throw error
+  }
+}
+
 module.exports = {
   sendBillCreationNotification,
   sendTestEmail,
-  initializeTransporter,
+  sendReportEmail,
 }

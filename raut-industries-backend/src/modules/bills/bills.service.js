@@ -11,6 +11,8 @@ const {
 } = require('./bills.calculator')
 const { BILL_MESSAGES, BILL_STATUS } = require('./bills.constants')
 const emailService = require('../../utils/emailService')
+const { generateBillPDF } = require('../../utils/pdfGenerator')
+const logger = require('../../utils/logger')
 
 // ─── Shared: resolve and calculate all inputs ─────────────────
 
@@ -264,6 +266,38 @@ const cancelBill = async (id) => {
   return await billsRepository.updateStatus(id, BILL_STATUS.CANCELLED)
 }
 
+// ─── Send Bill via Email ──────────────────────────────────────
+
+const sendBillViaEmail = async (bill, recipientEmail) => {
+  try {
+    if (!recipientEmail) {
+      throw { statusCode: 400, message: 'Recipient email is required' }
+    }
+
+    // Generate PDF
+    let pdfBuffer = null
+    try {
+      pdfBuffer = await generateBillPDF(bill)
+    } catch (pdfError) {
+      logger.error('Failed to generate PDF for email:', pdfError)
+      // Continue without PDF if generation fails
+    }
+
+    // Send via email service
+    await emailService.sendReportEmail({
+      recipientEmail,
+      reportName: `Bill #${bill.bill_no}`,
+      reportType: 'bill',
+      reportData: bill,
+      pdfBuffer,
+    })
+
+    return true
+  } catch (error) {
+    throw error
+  }
+}
+
 module.exports = {
   previewBill,
   getNextBillNumber,
@@ -273,4 +307,5 @@ module.exports = {
   updateBill,
   confirmBill,
   cancelBill,
+  sendBillViaEmail,
 }
