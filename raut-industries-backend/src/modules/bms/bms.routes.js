@@ -1,15 +1,16 @@
-const router         = require('express').Router();
-const { proxy }      = require('./bms.controller');
-const authenticate   = require('../../middlewares/auth.middleware');
+const express      = require('express');
+const router       = express.Router();
+const ctrl         = require('./bms.controller');
+const authenticate = require('../../middlewares/auth.middleware');
 
 router.use(authenticate);
 
-// Forwards ALL methods + paths to BMS /v1/*
-// POST /api/bms/clients          → BMS POST /v1/clients
-// GET  /api/bms/templates        → BMS GET  /v1/templates
-// GET  /api/bms/tax-rates        → BMS GET  /v1/tax-rates
-// POST /api/bms/invoices         → BMS POST /v1/invoices
-// GET  /api/bms/invoices         → BMS GET  /v1/invoices
-router.all('/{*splat}', proxy);
+// ── Send a Raut bill via BMS email + template ────────────────────────────────
+// POST /api/bms/send-bill  { billId, email, send_copy_to, message }
+router.post('/send-bill', ctrl.sendBillViaBMS);
+
+// ── Generic proxy for all other BMS routes ───────────────────────────────────
+// Maps to: GET/POST /api/bms/invoices, /api/bms/invoices/:id/pdf etc.
+router.all('/{*splat}', ctrl.proxy);
 
 module.exports = router;
