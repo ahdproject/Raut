@@ -3,13 +3,14 @@ const router       = express.Router()
 const ctrl         = require('./bms.controller')
 const authenticate = require('../../middlewares/auth.middleware')
 
-// Authenticate all BMS routes
 router.use(authenticate)
 
-// POST /api/bms/send-bill — send Raut bill via BMS email + template
-router.post('/send-bill', ctrl.sendBillViaBMS)
-
-// Fallback: catch all other routes and proxy to BMS
-router.use(ctrl.proxy)
+router.get('/invoices',            ctrl.getInvoices)
+router.post('/invoices',           ctrl.createInvoice)
+router.get('/invoices/:id',        ctrl.getInvoiceById)
+router.post('/invoices/:id/send',  ctrl.sendInvoice)
+router.get('/invoices/:id/pdf',    ctrl.downloadInvoicePdf)
+router.post('/payments',           ctrl.createPayment)
+router.get('/payment-modes',       ctrl.getPaymentModes)
 
 module.exports = router

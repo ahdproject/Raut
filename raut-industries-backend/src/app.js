@@ -13,7 +13,7 @@ const billRoutes       = require('./modules/bills/bills.routes')
 const employeeRoutes   = require('./modules/employees/employees.routes')
 const attendanceRoutes = require('./modules/attendance/attendance.routes')
 const reportRoutes     = require('./modules/reports/reports.routes')
-const bmsRoutes        = require('./modules/bms/bms.routes')   // ← NEW
+const bmsRoutes        = require('./modules/bms/bms.routes')
 
 const app = express()
 
@@ -32,7 +32,7 @@ app.use('/api/bills',        billRoutes)
 app.use('/api/employees',    employeeRoutes)
 app.use('/api/attendance',   attendanceRoutes)
 app.use('/api/reports',      reportRoutes)
-app.use('/api/bms',          bmsRoutes)                        // ← NEW
+app.use('/api/bms',          bmsRoutes)   // ← single registration
 
 app.use((req, res, next) => {
   res.status(404).json({ success: false, message: `Route ${req.method} ${req.originalUrl} not found` })

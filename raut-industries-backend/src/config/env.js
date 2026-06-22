@@ -20,6 +20,13 @@ module.exports = {
     adminEmail: process.env.ADMIN_EMAIL,
     senderName: process.env.EMAIL_SENDER_NAME || 'Raut Industries',
   },
+  // ── BMS (Octalyn) integration ──────────────────────────────────────────
+  bms: {
+    baseUrl: process.env.BMS_BASE_URL || 'https://api.octalyn.com/v1',
+    apiKey:  process.env.BMS_API_KEY,
+    apiSecret: process.env.BMS_API_SECRET,
+  },
+  // ───────────────────────────────────────────────────────────────────────
   nodeEnv: process.env.NODE_ENV || 'development',
   companyStateCode: process.env.COMPANY_STATE_CODE || '27',
 }
